@@ -26,6 +26,13 @@
 		<param name="overlay_alpha" value="$(arg overlay_alpha)"/>
 	</node>
 
+
+
+
+
+
+
+
 	<!-- VIDEO OUTPUT 
 	<arg name="output" default="display://0"/>
 	<arg name="output_codec" default="unknown"/>
