@@ -7,6 +7,8 @@ find_package(jetson-utils REQUIRED)
 find_package(jetson-inference REQUIRED)
 
 find_package(CUDA REQUIRED)
+find_package(OpenCV REQUIRED)
+
 
 # detect ROS1 vs ROS2
 find_package(catkin QUIET)
@@ -30,6 +32,10 @@ if( catkin_FOUND )
 		sensor_msgs
 		vision_msgs
 		std_msgs
+		cv_bridge
+		roscpp
+		image_transport
+		OpenCV
 	)
 	 
 	catkin_package(
@@ -72,6 +78,10 @@ target_link_libraries(imagenet ${catkin_LIBRARIES} jetson-inference)
 
 add_executable(detectnet src/node_detectnet.cpp ${common_src})
 target_link_libraries(detectnet ${catkin_LIBRARIES} jetson-inference)
+
+
+add_executable(safeland_cv src/safeland_cv.cpp ${common_src})
+target_link_libraries(safeland_cv ${catkin_LIBRARIES} jetson-inference)
 
 add_executable(segnet src/node_segnet.cpp ${common_src})
 target_link_libraries(segnet ${catkin_LIBRARIES} jetson-inference)

@@ -1,0 +1,49 @@
+<launch>
+
+	<!-- SEGNET -->
+	<arg name="model_name" default="fcn-resnet18-cityscapes-2048x1024"/>
+	<arg name="model_path" default=""/>
+	<arg name="prototxt_path" default=""/>
+	<arg name="class_labels_path" default=""/>
+	<arg name="class_colors_path" default=""/>
+	<arg name="input_blob" default=""/>
+	<arg name="output_blob" default=""/>
+	<arg name="mask_filter" default="linear"/>
+	<arg name="overlay_filter" default="linear"/>
+	<arg name="overlay_alpha" default="180.0"/>
+
+	<node pkg="ros_deep_learning" type="safeland_cv" name="safeland_cv" output="screen">
+		<!-- <remap from="/segnet/image_in" to="/video_source/raw"/> -->
+		<param name="model_name" value="$(arg model_name)"/>
+		<param name="model_path" value="$(arg model_path)"/>
+		<param name="prototxt_path" value="$(arg prototxt_path)"/>
+		<param name="class_labels_path" value="$(arg class_labels_path)"/>
+		<param name="class_colors_path" value="$(arg class_colors_path)"/>
+		<param name="input_blob" value="$(arg input_blob)"/>
+		<param name="output_blob" value="$(arg output_blob)"/>
+		<param name="mask_filter" value="$(arg mask_filter)"/>
+		<param name="overlay_filter" value="$(arg overlay_filter)"/>
+		<param name="overlay_alpha" value="$(arg overlay_alpha)"/>
+	</node>
+
+	<!-- VIDEO OUTPUT 
+	<arg name="output" default="display://0"/>
+	<arg name="output_codec" default="unknown"/>
+	<arg name="output_bitrate" default="0"/>
+
+	<include file="$(find ros_deep_learning)/launch/video_output.ros1.launch">
+		<arg name="topic" value="/segnet/overlay"/>
+		<arg name="output" value="$(arg output)"/>
+		<arg name="output_codec" value="$(arg output_codec)"/>
+		<arg name="output_bitrate" value="$(arg output_bitrate)"/>
+	</include>
+
+
+	<node
+		pkg="ros_deep_learning"
+		type="safe_land_decide.py"
+		name="safe_land_decide"
+		/>
+		-->
+
+</launch>

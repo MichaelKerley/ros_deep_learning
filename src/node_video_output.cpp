@@ -61,6 +61,8 @@ void img_callback( const sensor_msgs::ImageConstPtr input )
 // node main loop
 int main(int argc, char **argv)
 {
+
+	ROS_INFO("AHGGGGGGGGGGGGGGGGGGGGGGGGGGGGGg");
 	/*
 	 * create node instance
 	 */
@@ -130,7 +132,8 @@ int main(int argc, char **argv)
 	 * subscribe to image topic
 	 */
 	auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "image_in", 5, img_callback);
-	
+	//auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "/down_camera/rgb/image_raw", 1, img_callback);
+	//auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "/safeland_cv/class_mask", 5, img_callback);
 	topic_name = ROS_SUBSCRIBER_TOPIC(img_sub);
 
 

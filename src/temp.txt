@@ -1,0 +1,8 @@
+${workspaceFolder}/**
+/home/michael/jetson-inference/**
+/usr/local/**
+/usr/src/linux-headers-5.10.104-tegra-ubuntu20.04_aarch64/kernel-5.10/include/linux/**
+/usr/local/cuda-11.4/targets/aarch64-linux/include/cuda/std/detail/libcxx/include/**
+/usr/include/linux/**
+/usr/src/linux-headers-5.10.104-tegra-ubuntu20.04_aarch64/kernel-5.10/include/uapi/linux/**
+/usr/lib/gcc/aarch64-linux-gnu/9/include/**
