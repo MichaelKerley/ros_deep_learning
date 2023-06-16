@@ -41,6 +41,7 @@
 */
 
 // globals
+sensor_msgs::Image classFrame;
 segNet *net = NULL;
 
 segNet::FilterMode overlay_filter = segNet::FILTER_LINEAR;
@@ -135,28 +136,22 @@ bool publish_mask_class(uint32_t width, uint32_t height)
 	msg.header.stamp = ROS_TIME_NOW();
 
 	// publish the message
+	classFrame = msg; 
 	mask_class_pub->publish(msg);
 }
 
-bool publish_is_safe_to_land(uint32_t width, uint32_t height)
+
+//Was used for testing move to safelandingplanner
+void publish_is_safe_to_land()
 {
-	// assure correct image size
-	if (!mask_class_cvt->Resize(width, height, IMAGE_GRAY8))
-		return false;
-	// generate the overlay
-	if (!net->Mask((uint8_t *)mask_class_cvt->ImageGPU(), width, height))
-		return false;
-	// populate the message
-	sensor_msgs::Image rosImage;
-	if (!mask_class_cvt->Convert(rosImage, IMAGE_GRAY8))
-		return false;
-	// populate timestamp in header field
-	rosImage.header.stamp = ROS_TIME_NOW();
+
+	std_msgs::Int8 msg.data = 1; 
+	
 	//converting to open cv
 	cv_bridge::CvImagePtr cv_ptr;
 	try
 	{
-		cv_ptr = cv_bridge::toCvCopy(rosImage); //, sensor_msgs::image_encodings::BGR8);
+		cv_ptr = cv_bridge::toCvCopy(frame); //, sensor_msgs::image_encodings::BGR8);
 	}
 	catch (cv_bridge::Exception &e)
 	{
@@ -174,14 +169,18 @@ bool publish_is_safe_to_land(uint32_t width, uint32_t height)
 	int x = pixelPtr[(matrix.rows/2) * matrix.cols * cn + (matrix.cols/2) * cn];
 	ROS_INFO("The class at the center is %s\n", net->GetClassLabel(x));
 
-	std_msgs::Int8 msg;
-	msg.data = 17;
+
+	if(net->GetClassLabel(x) == net->FindClassID("road"))
+	{
+		msg.data = 0;
+	}
 	safe_to_land_pub->publish(msg);
 }
 
 // input image subscriber callback
 void img_callback(const sensor_msgs::ImageConstPtr input)
 {
+	ROS_INFO("inside image callback\n");
 	// convert the image to reside on GPU
 	if (!input_cvt || !input_cvt->Convert(input))
 	{
@@ -198,8 +197,8 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 
 	// only fires when somthing is subscribed
 	//  color overlay
-
-	publish_is_safe_to_land(input->width, input->height);
+	publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
+	publish_is_safe_to_land();
 
 	if (ROS_NUM_SUBSCRIBERS(overlay_pub) > 0)
 		publish_overlay(input->width, input->height);
@@ -209,8 +208,8 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 		publish_mask_color(input->width, input->height);
 
 	// class mask
-	if (ROS_NUM_SUBSCRIBERS(mask_class_pub) > 0)
-		publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
+	//if (ROS_NUM_SUBSCRIBERS(mask_class_pub) > 0)
+		//publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
 }
 
 // node main loop
