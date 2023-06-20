@@ -19,6 +19,10 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
+
+
+
+//imports
 #include "std_msgs/Int8.h"
 
 #include "ros_compat.h"
@@ -33,6 +37,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
+#include <mavros_msgs/Altitude.h>
+
 /*
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -42,6 +48,7 @@
 
 // globals
 sensor_msgs::Image classFrame;
+mavros_msgs::Altitude droneAltitude; 
 segNet *net = NULL;
 
 segNet::FilterMode overlay_filter = segNet::FILTER_LINEAR;
@@ -145,13 +152,14 @@ bool publish_mask_class(uint32_t width, uint32_t height)
 void publish_is_safe_to_land()
 {
 
-	std_msgs::Int8 msg.data = 1; 
+	std_msgs::Int8 msg;
+	msg.data = 1;
 	
 	//converting to open cv
 	cv_bridge::CvImagePtr cv_ptr;
 	try
 	{
-		cv_ptr = cv_bridge::toCvCopy(frame); //, sensor_msgs::image_encodings::BGR8);
+		cv_ptr = cv_bridge::toCvCopy(classFrame); //, sensor_msgs::image_encodings::BGR8);
 	}
 	catch (cv_bridge::Exception &e)
 	{
@@ -168,9 +176,10 @@ void publish_is_safe_to_land()
 	//find if it is road or not
 	int x = pixelPtr[(matrix.rows/2) * matrix.cols * cn + (matrix.cols/2) * cn];
 	ROS_INFO("The class at the center is %s\n", net->GetClassLabel(x));
+	//ROS_INFO("Using find class ID for road %d", net->FindClassID)
 
 
-	if(net->GetClassLabel(x) == net->FindClassID("road"))
+	if(x== net->FindClassID("road"))
 	{
 		msg.data = 0;
 	}
@@ -207,9 +216,18 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 	if (ROS_NUM_SUBSCRIBERS(mask_color_pub) > 0)
 		publish_mask_color(input->width, input->height);
 
+
+	//deal with later
 	// class mask
 	//if (ROS_NUM_SUBSCRIBERS(mask_class_pub) > 0)
 		//publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
+}
+
+
+void alt_callback(const mavros_msgs::Altitude altitude_msg)
+{
+	droneAltitude = altitude_msg;
+	ROS_INFO("inside alt callback");
 }
 
 // node main loop
@@ -223,7 +241,7 @@ int main(int argc, char **argv)
 	/*
 	 * declare parameters
 	 */
-	std::string model_name = "fcn-resnet18-cityscapes-2048x1024";
+	std::string model_name = "fcn-resnet18-cityscapes-1024x512";// fcn-resnet18-cityscapes-2048x1024";
 	std::string model_path;
 	std::string prototxt_path;
 	std::string class_labels_path;
@@ -359,7 +377,9 @@ int main(int argc, char **argv)
 
 	// auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "image_in", 5, img_callback);
 	auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "/down_camera/rgb/image_raw", 1, img_callback);
-
+	
+	//Subing to altitude
+	auto alt_sub = ROS_CREATE_SUBSCRIBER(mavros_msgs::Altitude, "/mavros/altitude", 1, alt_callback);
 	/*
 	 * wait for messages
 	 */
@@ -374,6 +394,8 @@ int main(int argc, char **argv)
 	delete overlay_cvt;
 	delete mask_color_cvt;
 	delete mask_class_cvt;
+	//delete classFrame;
+	//delete droneAltitude;
 
 	return 0;
 }
