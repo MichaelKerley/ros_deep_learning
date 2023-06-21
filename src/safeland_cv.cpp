@@ -20,10 +20,10 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-
-
-//imports
+// imports
 #include "std_msgs/Int8.h"
+#include <stdio.h>
+#include "ros/ros.h"
 
 #include "ros_compat.h"
 #include "image_converter.h"
@@ -39,6 +39,7 @@
 
 #include <mavros_msgs/Altitude.h>
 
+#include <math.h>
 /*
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -48,7 +49,7 @@
 
 // globals
 sensor_msgs::Image classFrame;
-mavros_msgs::Altitude droneAltitude; 
+mavros_msgs::Altitude droneAltitude;
 segNet *net = NULL;
 
 segNet::FilterMode overlay_filter = segNet::FILTER_LINEAR;
@@ -143,19 +144,14 @@ bool publish_mask_class(uint32_t width, uint32_t height)
 	msg.header.stamp = ROS_TIME_NOW();
 
 	// publish the message
-	classFrame = msg; 
+	classFrame = msg;
 	mask_class_pub->publish(msg);
 }
 
-
-//Was used for testing move to safelandingplanner
+// might break up into multiple methods that are called later
 void publish_is_safe_to_land()
 {
-
-	std_msgs::Int8 msg;
-	msg.data = 1;
-	
-	//converting to open cv
+	// converting to open cv
 	cv_bridge::CvImagePtr cv_ptr;
 	try
 	{
@@ -165,24 +161,50 @@ void publish_is_safe_to_land()
 	{
 		ROS_ERROR("cv_bridge exception: %s", e.what());
 	}
-	
-	//getting row col data
+
+	std_msgs::Int8 msg;
+	_Float32 D = 0.18; // diameter of drone in meters
 	cv::Mat matrix = cv_ptr->image;
+	_Float32 theta = 69 * (M_PI / 180); // radians horizantalFOV
+	_Float32 phi = 42 * (M_PI / 180);	// degrees verticalFOV
+	int Rx = matrix.cols;
+	int Ry = matrix.rows;
+	_Float32 alt = droneAltitude.local; // local altitude of drone in meters
+	msg.data = 1;
+	// might need to do some casting above
+
+	_Float32 Px = (2 * alt * tan(theta)) / (Rx);
+	_Float32 Py = (2 * alt * tan(phi)) / (Ry);
+
+	int Lx = ceil((D / 2) * (1 / Px)); // bounds in x
+	int Ly = ceil((D / 2) * (1 / Py)); // bounds in y
+
+	// getting row col data
 	uint8_t *pixelPtr = (uint8_t *)matrix.data;
 	int cn = matrix.channels();
-	ROS_INFO("The width or cols is %d\n", matrix.cols);
-	ROS_INFO("The height or rows is %d\n", matrix.rows);
 
-	//find if it is road or not
-	int x = pixelPtr[(matrix.rows/2) * matrix.cols * cn + (matrix.cols/2) * cn];
-	ROS_INFO("The class at the center is %s\n", net->GetClassLabel(x));
-	//ROS_INFO("Using find class ID for road %d", net->FindClassID)
+	int typeOfObj;
 
+	int centerX = matrix.cols / 2;
+	int centerY = matrix.rows / 2;
 
-	if(x== net->FindClassID("road"))
+	for (int i = (centerX - Lx); i < (centerX + Lx); i++)
 	{
-		msg.data = 0;
+		for (int j = (centerY - Ly); j < (centerY + Ly); j++)
+		{
+			typeOfObj = pixelPtr[i * matrix.cols * cn + j * cn];
+			if (typeOfObj == net->FindClassID("road"))
+			{
+				msg.data = 0;
+				break;
+			}
+		}
+		if (msg.data = 0)
+		{
+			break;
+		}
 	}
+
 	safe_to_land_pub->publish(msg);
 }
 
@@ -204,8 +226,6 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 		return;
 	}
 
-	// only fires when somthing is subscribed
-	//  color overlay
 	publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
 	publish_is_safe_to_land();
 
@@ -216,13 +236,11 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 	if (ROS_NUM_SUBSCRIBERS(mask_color_pub) > 0)
 		publish_mask_color(input->width, input->height);
 
-
-	//deal with later
-	// class mask
-	//if (ROS_NUM_SUBSCRIBERS(mask_class_pub) > 0)
-		//publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
+	// deal with later
+	//  class mask
+	// if (ROS_NUM_SUBSCRIBERS(mask_class_pub) > 0)
+	// publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
 }
-
 
 void alt_callback(const mavros_msgs::Altitude altitude_msg)
 {
@@ -241,7 +259,7 @@ int main(int argc, char **argv)
 	/*
 	 * declare parameters
 	 */
-	std::string model_name = "fcn-resnet18-cityscapes-1024x512";// fcn-resnet18-cityscapes-2048x1024";
+	std::string model_name = "fcn-resnet18-cityscapes-1024x512"; // fcn-resnet18-cityscapes-2048x1024";
 	std::string model_path;
 	std::string prototxt_path;
 	std::string class_labels_path;
@@ -363,7 +381,7 @@ int main(int argc, char **argv)
 	/*
 	 * advertise publisher topics
 	 */
-	
+
 	ROS_CREATE_PUBLISHER(std_msgs::Int8, "is_safe_to_land", 2, safe_to_land_pub);
 	ROS_CREATE_PUBLISHER(sensor_msgs::Image, "overlay", 2, overlay_pub);
 	ROS_CREATE_PUBLISHER(sensor_msgs::Image, "color_mask", 2, mask_color_pub);
@@ -377,8 +395,8 @@ int main(int argc, char **argv)
 
 	// auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "image_in", 5, img_callback);
 	auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "/down_camera/rgb/image_raw", 1, img_callback);
-	
-	//Subing to altitude
+
+	// Subing to altitude
 	auto alt_sub = ROS_CREATE_SUBSCRIBER(mavros_msgs::Altitude, "/mavros/altitude", 1, alt_callback);
 	/*
 	 * wait for messages
@@ -394,8 +412,8 @@ int main(int argc, char **argv)
 	delete overlay_cvt;
 	delete mask_color_cvt;
 	delete mask_class_cvt;
-	//delete classFrame;
-	//delete droneAltitude;
+	// delete classFrame;
+	// delete droneAltitude;
 
 	return 0;
 }
