@@ -1,7 +1,7 @@
 <launch>
 
 	<!-- SEGNET -->
-	<arg name="model_name" default="fcn-resnet18-cityscapes-2048x1024"/>
+	<arg name="model_name" default="fcn-resnet18-cityscapes-1024x512"/>
 	<arg name="model_path" default=""/>
 	<arg name="prototxt_path" default=""/>
 	<arg name="class_labels_path" default=""/>
