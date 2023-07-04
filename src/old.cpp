@@ -19,11 +19,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
-
-// imports
 #include "std_msgs/Int8.h"
-#include <stdio.h>
-#include "ros/ros.h"
 
 #include "ros_compat.h"
 #include "image_converter.h"
@@ -37,9 +33,6 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
-#include <mavros_msgs/Altitude.h>
-
-#include <math.h>
 /*
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -48,8 +41,6 @@
 */
 
 // globals
-sensor_msgs::Image classFrame;
-mavros_msgs::Altitude droneAltitude;
 segNet *net = NULL;
 
 segNet::FilterMode overlay_filter = segNet::FILTER_LINEAR;
@@ -133,11 +124,10 @@ bool publish_mask_class(uint32_t width, uint32_t height)
 	// generate the overlay
 	if (!net->Mask((uint8_t *)mask_class_cvt->ImageGPU(), width, height))
 		return false;
-	
+
 	// populate the message
 	sensor_msgs::Image msg;
 
-	//I think this turns to a ros image
 	if (!mask_class_cvt->Convert(msg, IMAGE_GRAY8))
 		return false;
 
@@ -145,80 +135,53 @@ bool publish_mask_class(uint32_t width, uint32_t height)
 	msg.header.stamp = ROS_TIME_NOW();
 
 	// publish the message
-	classFrame = msg;
 	mask_class_pub->publish(msg);
 }
 
-// might break up into multiple methods that are called later
-void publish_is_safe_to_land()
+bool publish_is_safe_to_land(uint32_t width, uint32_t height)
 {
-
-	//cv::Mat cv_image(cv::Size(1024, 512), IMAGE_GRAY8, imgCUDA);
-	// converting to open cv
+	// assure correct image size
+	if (!mask_class_cvt->Resize(width, height, IMAGE_GRAY8))
+		return false;
+	// generate the overlay
+	if (!net->Mask((uint8_t *)mask_class_cvt->ImageGPU(), width, height))
+		return false;
+	// populate the message
+	sensor_msgs::Image rosImage;
+	if (!mask_class_cvt->Convert(rosImage, IMAGE_GRAY8))
+		return false;
+	// populate timestamp in header field
+	rosImage.header.stamp = ROS_TIME_NOW();
+	//converting to open cv
 	cv_bridge::CvImagePtr cv_ptr;
 	try
 	{
-		cv_ptr = cv_bridge::toCvCopy(classFrame); //, sensor_msgs::image_encodings::BGR8);
+		cv_ptr = cv_bridge::toCvCopy(rosImage); //, sensor_msgs::image_encodings::BGR8);
 	}
 	catch (cv_bridge::Exception &e)
 	{
 		ROS_ERROR("cv_bridge exception: %s", e.what());
 	}
+	
+	//getting row col data
+	cv::Mat matrix = cv_ptr->image;
+	uint8_t *pixelPtr = (uint8_t *)matrix.data;
+	int cn = matrix.channels();
+	ROS_INFO("The width or cols is %d\n", matrix.cols);
+	ROS_INFO("The height or rows is %d\n", matrix.rows);
+
+	//find if it is road or not
+	int x = pixelPtr[(matrix.rows/2) * matrix.cols * cn + (matrix.cols/2) * cn];
+	ROS_INFO("The class at the center is %s\n", net->GetClassLabel(x));
 
 	std_msgs::Int8 msg;
-	msg.data = 1;
-	_Float32 D = 1.8; //should be 1.8 // diameter of drone in meters
-	cv::Mat matrix = cv_ptr->image;
-	_Float32 theta = 69 * (M_PI / 180); // radians horizantalFOV
-	_Float32 phi = 42 * (M_PI / 180);	// degrees verticalFOV
-	int Rx = matrix.cols;
-	int Ry = matrix.rows;
-	_Float32 alt = droneAltitude.local; // local altitude of drone in meters
-
-	// might need to do some casting above
-
-	_Float32 Px = (2 * alt * tan(theta)) / (Rx); //passes sanity check
-	_Float32 Py = (2 * alt * tan(phi)) / (Ry);
-
-	int Lx = ceil((D / 2) * (1 / Px)); // bounds in x
-	int Ly = ceil((D / 2) * (1 / Py)); // bounds in y
-
-	//printf("Lx is %d\n", Lx);
-	//printf("Ly is %d\n", Ly);
-	// getting row col data
-	uint8_t *pixelPtr = (uint8_t *)matrix.data;
-	int cn = matrix.channels();                            
-
-	int typeOfObj;
-
-	int centerX = matrix.cols / 2;
-	int centerY = matrix.rows / 2;
-	
-
-	for (int i = (centerX - Lx); i < (centerX + Lx); i++)
-	{
-		for (int j = (centerY - Ly); j < (centerY + Ly); j++)
-		{
-			typeOfObj = pixelPtr[i * matrix.cols * cn + j * cn];
-			if (typeOfObj == net->FindClassID("road"))
-			{
-				msg.data = 0;
-				break;
-			}
-		}
-		if (msg.data == 0)
-		{
-			break;
-		}
-	}
-
+	msg.data = 17;
 	safe_to_land_pub->publish(msg);
 }
 
 // input image subscriber callback
 void img_callback(const sensor_msgs::ImageConstPtr input)
 {
-	//ROS_INFO("inside image callback\n");
 	// convert the image to reside on GPU
 	if (!input_cvt || !input_cvt->Convert(input))
 	{
@@ -227,18 +190,16 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 	}
 
 	// process the segmentation network
-	//converts to CUDA
 	if (!net->Process(input_cvt->ImageGPU(), input_cvt->GetWidth(), input_cvt->GetHeight()))
 	{
 		ROS_ERROR("failed to process segmentation on %ux%u image", input->width, input->height);
 		return;
 	}
 
-	//publish_mask_class(net->GetGridWidth(), net->GetGridHeight()); //mask is different resolution from orignial image
+	// only fires when somthing is subscribed
+	//  color overlay
 
-	//this will fuck preformance probably
-	publish_mask_class(input->width, input->height); //mask is different resolution from orignial image
-	publish_is_safe_to_land();
+	publish_is_safe_to_land(input->width, input->height);
 
 	if (ROS_NUM_SUBSCRIBERS(overlay_pub) > 0)
 		publish_overlay(input->width, input->height);
@@ -247,18 +208,9 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 	if (ROS_NUM_SUBSCRIBERS(mask_color_pub) > 0)
 		publish_mask_color(input->width, input->height);
 
-	// deal with later
-	//  class mask
-	// if (ROS_NUM_SUBSCRIBERS(mask_class_pub) > 0)
-	// publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
-}
-
-void alt_callback(const mavros_msgs::Altitude altitude_msg)
-{
-	droneAltitude = altitude_msg;
-
-	//printf("The altitude inside the alt callback is %f", altitude_msg.local)
-	//ROS_INFO("inside alt callback");
+	// class mask
+	if (ROS_NUM_SUBSCRIBERS(mask_class_pub) > 0)
+		publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
 }
 
 // node main loop
@@ -272,7 +224,7 @@ int main(int argc, char **argv)
 	/*
 	 * declare parameters
 	 */
-	std::string model_name = "fcn-resnet18-cityscapes-1024x512"; // fcn-resnet18-cityscapes-2048x1024";
+	std::string model_name = "fcn-resnet18-cityscapes-2048x1024";
 	std::string model_path;
 	std::string prototxt_path;
 	std::string class_labels_path;
@@ -339,12 +291,6 @@ int main(int argc, char **argv)
 	// set alpha blending value for classes that don't explicitly already have an alpha
 	net->SetOverlayAlpha(overlay_alpha);
 
-
-	//setting class color
-	net->SetClassColor( (uint32_t )  net->FindClassID("road"), 255.0, 255.0, 0.0, 0.0 ); //yellow
-	net->SetClassColor( (uint32_t )  net->FindClassID("car"), 255.0 , 0.0, 0.0, 0.0 ); //red
-	net->SetClassColor ( (uint32_t ) net->FindClassID("terrain"), 0.0, 255.0, 0.0, 0.0); //green
-
 	/*
 	 * create the class labels parameter vector
 	 */
@@ -397,22 +343,10 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-
-	/*
-	 * subscribe to image topic
-	 */
-
-	// auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "image_in", 5, img_callback);
-	auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "/down_camera/rgb/image_raw", 1, img_callback);
-
-	// Subing to altitude
-	auto alt_sub = ROS_CREATE_SUBSCRIBER(mavros_msgs::Altitude, "/mavros/altitude", 1, alt_callback);
-
-
 	/*
 	 * advertise publisher topics
 	 */
-
+	
 	ROS_CREATE_PUBLISHER(std_msgs::Int8, "is_safe_to_land", 2, safe_to_land_pub);
 	ROS_CREATE_PUBLISHER(sensor_msgs::Image, "overlay", 2, overlay_pub);
 	ROS_CREATE_PUBLISHER(sensor_msgs::Image, "color_mask", 2, mask_color_pub);
@@ -420,6 +354,12 @@ int main(int argc, char **argv)
 
 	ROS_CREATE_PUBLISHER_STATUS(vision_msgs::VisionInfo, "vision_info", 1, info_callback, info_pub);
 
+	/*
+	 * subscribe to image topic
+	 */
+
+	// auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "image_in", 5, img_callback);
+	auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "/down_camera/rgb/image_raw", 1, img_callback);
 
 	/*
 	 * wait for messages
@@ -435,8 +375,6 @@ int main(int argc, char **argv)
 	delete overlay_cvt;
 	delete mask_color_cvt;
 	delete mask_class_cvt;
-	// delete classFrame;
-	// delete droneAltitude;
 
 	return 0;
 }

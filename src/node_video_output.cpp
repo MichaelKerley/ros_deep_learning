@@ -62,7 +62,7 @@ void img_callback( const sensor_msgs::ImageConstPtr input )
 int main(int argc, char **argv)
 {
 
-	ROS_INFO("AHGGGGGGGGGGGGGGGGGGGGGGGGGGGGGg");
+	//ROS_INFO("AHGGGGGGGGGGGGGGGGGGGGGGGGGGGGGg");
 	/*
 	 * create node instance
 	 */
