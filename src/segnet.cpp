@@ -149,6 +149,8 @@ bool publish_mask_class(uint32_t width, uint32_t height)
 	mask_class_pub->publish(msg);
 }
 
+
+//move into another file
 // might break up into multiple methods that are called later
 void publish_is_safe_to_land()
 {
@@ -234,12 +236,7 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 		return;
 	}
 
-	//publish_mask_class(net->GetGridWidth(), net->GetGridHeight()); //mask is different resolution from orignial image
-
-	//this will fuck preformance probably
-	publish_mask_class(input->width, input->height); //mask is different resolution from orignial image
-	publish_is_safe_to_land();
-
+	// color overlay
 	if (ROS_NUM_SUBSCRIBERS(overlay_pub) > 0)
 		publish_overlay(input->width, input->height);
 
@@ -247,10 +244,11 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 	if (ROS_NUM_SUBSCRIBERS(mask_color_pub) > 0)
 		publish_mask_color(input->width, input->height);
 
-	// deal with later
-	//  class mask
-	// if (ROS_NUM_SUBSCRIBERS(mask_class_pub) > 0)
-	// publish_mask_class(net->GetGridWidth(), net->GetGridHeight());
+	//publish_mask_class(net->GetGridWidth(), net->GetGridHeight()); //mask is different resolution from orignial image
+	//this will fuck preformance probably
+	publish_mask_class(input->width, input->height); //mask is different resolution from orignial image
+	publish_is_safe_to_land();
+
 }
 
 void alt_callback(const mavros_msgs::Altitude altitude_msg)
