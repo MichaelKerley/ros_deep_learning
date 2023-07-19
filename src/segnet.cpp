@@ -244,6 +244,7 @@ void img_callback(const sensor_msgs::ImageConstPtr input)
 	if (ROS_NUM_SUBSCRIBERS(mask_color_pub) > 0)
 		publish_mask_color(input->width, input->height);
 
+
 	//publish_mask_class(net->GetGridWidth(), net->GetGridHeight()); //mask is different resolution from orignial image
 	//this will fuck preformance probably
 	publish_mask_class(input->width, input->height); //mask is different resolution from orignial image
@@ -401,7 +402,7 @@ int main(int argc, char **argv)
 	 */
 
 	// auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "image_in", 5, img_callback);
-	auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "/down_camera/rgb/image_raw", 1, img_callback);
+	auto img_sub = ROS_CREATE_SUBSCRIBER(sensor_msgs::Image, "/camera/color/image_raw", 5, img_callback);
 
 	// Subing to altitude
 	auto alt_sub = ROS_CREATE_SUBSCRIBER(mavros_msgs::Altitude, "/mavros/altitude", 1, alt_callback);
